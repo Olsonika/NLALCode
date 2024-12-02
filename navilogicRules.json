@@ -1,0 +1,41 @@
+{
+  "name": "navilogicRules",
+  "description": "rules",
+  "rules": [
+    {
+      "id": "AA0241",
+      "action": "Error",
+      "justification": "Remnant from Objects, we do not want that."
+    },
+    {
+      "id": "AA0215",
+      "action": "Hidden",
+      "justification": "We do not want TR in file names."
+    },
+    {
+      "id": "AS0084",
+      "action": "Hidden",
+      "justification": "We are developing customer's extension which are in range 50 000 - 90 000"
+    },
+    {
+      "id": "AA0008",
+      "action": "Error",
+      "justification": "Remnant from Objects, we do not want that."
+    },
+    {
+      "id": "AS0092",
+      "action": "Hidden",
+      "justification": "We do not use that."
+    },
+    {
+      "id": "AS0051",
+      "action": "Hidden",
+      "justification": "Not for AppSource"
+    },
+    {
+      "id": "AS0052",
+      "action": "Hidden",
+      "justification": "Not for AppSource"
+    }
+  ]
+}
