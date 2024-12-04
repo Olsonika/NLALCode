@@ -1,15 +1,39 @@
-// Welcome to your new AL extension.
-// Remember that object names and IDs should be unique across all extensions.
-// AL snippets start with t*, like tpageext - give them a try and happy coding!
-
-namespace DefaultPublisher.ALCode;
-
-using Microsoft.Sales.Customer;
-
-pageextension 60300 CustomerListExt extends "Customer List"
+codeunit 60301 "GetCompaniesByEmail"
 {
-    trigger OnOpenPage();
+    [ServiceEnabled]
+    procedure GetCompaniesForEmail(EmailAddress: Text[250]): List of [Text]
+    var
+        Customer: Record Customer;
+        Contact: Record Contact;
+        Companies: List of [Text];
+        CompanyNameAndId: Text[250];
     begin
-        Message('App published: Hello world!');
+        // Search in Customer table
+        if Customer.FindSet() then begin
+            repeat
+                if Customer."E-Mail" = EmailAddress then begin
+                    CompanyNameAndId := Format(Customer.Name) + ' (' + Customer."No." + ')';
+                    if not Companies.Contains(CompanyNameAndId) then
+                        Companies.Add(CompanyNameAndId);
+                end;
+            until Customer.Next() = 0;
+        end;
+
+        // Search in Contact table
+        if Contact.FindSet() then begin
+            repeat
+                if Contact."E-Mail" = EmailAddress then begin
+                    // Look for the related customer
+                    if Customer.Get(Contact."Company No.") then begin
+                        CompanyNameAndId := Format(Customer.Name) + ' (' + Customer."No." + ')';
+                        if not Companies.Contains(CompanyNameAndId) then
+                            Companies.Add(CompanyNameAndId);
+                    end;
+                end;
+            until Contact.Next() = 0;
+        end;
+
+        // Return the list of companies
+        exit(Companies);
     end;
 }
