@@ -8,17 +8,34 @@ codeunit 60301 "NLOutlookExtension"
     procedure GetCompaniesForEmail(EmailAddress: Text[250]; PageSize: Integer; PageNumber: Integer) returnValue: Text
     var
         Customer: Record Customer;
+        Contact: Record Contact; // Assuming Contact table is used for contact details
         Companies: List of [Text];
         Result: Text[1024];
         StartIndex: Integer;
         EndIndex: Integer;
         Index: Integer;
+        ContactName: Text[250];
+        ContactEmail: Text[250];
     begin
         // Search in Customer table
         Customer.SetRange("E-Mail", EmailAddress);
         if Customer.FindSet() then
             repeat
-                Companies.Add(Format(Customer.Name) + ' (' + Customer."No." + ')');
+                // Lookup primary contact name and email
+                if Contact.Get(Customer."Primary Contact No.") then begin
+                    ContactName := Contact.Name;
+                    ContactEmail := Contact."E-Mail";
+                end else begin
+                    ContactName := 'N/A';
+                    ContactEmail := 'N/A';
+                end;
+
+                // Add company details with primary contact info
+                Companies.Add(
+                    Format(Customer.Name) + ' (' + Customer."No." + '), ' +
+                    'Contact: ' + ContactName + ', ' +
+                    'Email: ' + ContactEmail
+                );
             until Customer.Next() = 0;
 
         // Define pagination range
@@ -34,6 +51,7 @@ codeunit 60301 "NLOutlookExtension"
 
         exit(Result.TrimEnd(';'));
     end;
+
 
     [ServiceEnabled]
     procedure GetProjectsForCompany(CompanyId: Code[20]; PageSize: Integer; PageNumber: Integer; IncludeClosedProjects: Boolean) returnValue: Text
@@ -181,10 +199,19 @@ codeunit 60301 "NLOutlookExtension"
         if not Customer.Get(CompanyId) then
             Error('Company with ID "%1" not found.', CompanyId);
 
+        // Calculate FlowFields for balance and overdue amounts
+        Customer.CalcFields(Balance, "Balance Due");
+
         // Add main company details to JSON object
         JsonObject.Add('CompanyName', Customer.Name);
-        JsonObject.Add('Balance', Customer.Balance);
-        JsonObject.Add('OverdueAmount', Customer."Balance Due");
+        JsonObject.Add('Balance', Format(Customer.Balance)); // Ensure proper formatting
+        JsonObject.Add('OverdueAmount', Format(Customer."Balance Due"));
+
+        // Add location details
+        JsonObject.Add('Address', Customer.Address);
+        JsonObject.Add('City', Customer.City);
+        JsonObject.Add('PostalCode', Customer."Post Code");
+        JsonObject.Add('Country', Customer."Country/Region Code");
 
         // Fetch main contact details
         if Contact.Get(Customer."Primary Contact No.") then begin
@@ -215,9 +242,10 @@ codeunit 60301 "NLOutlookExtension"
         // Convert JSON object to string
         JsonObject.WriteTo(JsonString);
 
-        // Return JSON string
+        // Return the JSON response
         exit(JsonString);
     end;
+
 
     [ServiceEnabled]
     procedure CreateCustomer(
