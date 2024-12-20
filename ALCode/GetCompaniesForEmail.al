@@ -101,6 +101,7 @@ codeunit 60301 "NLOutlookExtension"
         StartIndex: Integer;
         EndIndex: Integer;
         Index: Integer;
+        QuoteLink: Text;
     begin
         // Filter sales quotes for the specific company
         SalesHeader.SetRange("Sell-to Customer No.", CompanyId);
@@ -108,7 +109,9 @@ codeunit 60301 "NLOutlookExtension"
 
         if SalesHeader.FindSet() then
             repeat
-                Quotes.Add(Format(SalesHeader."No.") + ': ' + Format(SalesHeader."Document Date"));
+                // Generate link for each sales quote
+                QuoteLink := GetSalesQuoteLink(SalesHeader."No.");
+                Quotes.Add(Format(SalesHeader."No.") + ': ' + Format(SalesHeader."Document Date") + ' (' + QuoteLink + ')');
             until SalesHeader.Next() = 0;
 
         // Define pagination range
@@ -124,6 +127,8 @@ codeunit 60301 "NLOutlookExtension"
 
         exit(Result.TrimEnd(';'));
     end;
+
+
 
     [ServiceEnabled]
     procedure GetLastInvoices(CompanyId: Code[20]; Count: Integer) returnValue: Text
@@ -493,6 +498,66 @@ codeunit 60301 "NLOutlookExtension"
         returnValue := 'Customer with ID ' + CustomerId + ' updated successfully.';
     end;
 
+    //https://nl-server.navilogic.dk/bc24-intern/?company=CRONUS%20Danmark%20A%2fS
+    procedure GetSalesQuoteLink(QuoteNo: Code[20]): Text
+    var
+        BaseUrl: Text;
+        Tenant: Text;
+        PageId: Integer;
+        Bookmark: Text;
+        Link: Text;
+    begin
+        // Fixed Base URL
+        BaseUrl := 'https://nl-server.navilogic.dk/bc24-intern/?company=CRONUS%20Danmark%20A%2fS';
+
+        // Tenant and Page ID
+        Tenant := 'default';
+        PageId := 41;
+
+        // Manually create the bookmark for the Sales Quote (e.g., "19_1001")
+        Bookmark := StrSubstNo('19_%1', QuoteNo);
+
+        // Construct the full URL
+        Link := StrSubstNo(
+            '%1&tenant=%2&page=%3&bookmark=%4',
+            BaseUrl,
+            Tenant,
+            PageId,
+            Bookmark
+        );
+
+        exit(Link);
+    end;
+
+
+    procedure EncodeDataString(Input: Text): Text
+    var
+        EncodedText: Text;
+    begin
+        EncodedText := Input;
+        EncodedText := StrSubstNo(EncodedText, '%1', '%20'); // Replace spaces with %20
+        EncodedText := StrSubstNo(EncodedText, '%', '%25');  // Replace % with %25
+        EncodedText := StrSubstNo(EncodedText, '/', '%2F');  // Replace / with %2F
+        EncodedText := StrSubstNo(EncodedText, '&', '%26');  // Replace & with %26
+        EncodedText := StrSubstNo(EncodedText, '=', '%3D');  // Replace = with %3D
+        EncodedText := StrSubstNo(EncodedText, '#', '%23');  // Replace # with %23
+        EncodedText := StrSubstNo(EncodedText, '?', '%3F');  // Replace ? with %3F
+        EncodedText := StrSubstNo(EncodedText, '\', '%5C');  // Replace \ with %5C
+        exit(EncodedText);
+    end;
+
+
+
+    procedure GetCurrentCompanyName(): Text
+    var
+        CompanyInfo: Record "Company Information";
+    begin
+        if CompanyInfo.Get() then
+            exit(CompanyInfo.Name)
+        else
+            Error('Company information is not available.');
+    end;
+
     // ---------------------------MOCK DATA UNTIL EXTENSION ADDED TO SANDBOX-------------------------------
     [ServiceEnabled]
     procedure GetTaskAnalysis(TaskId: Code[20]) returnValue: Text
@@ -533,7 +598,5 @@ codeunit 60301 "NLOutlookExtension"
         // Return the JSON response
         exit(JsonString);
     end;
-
-
 
 }
