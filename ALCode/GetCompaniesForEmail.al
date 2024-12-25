@@ -221,6 +221,7 @@ codeunit 60301 "NLOutlookExtension"
         // Fetch main contact details
         if Contact.Get(Customer."Primary Contact No.") then begin
             Clear(JsonContact); // Reset the JsonObject for the primary contact
+            JsonContact.Add('ContactNo', Contact."No."); // Add the contact number
             JsonContact.Add('Name', Contact.Name);
             JsonContact.Add('Phone', Contact."Phone No.");
             JsonContact.Add('Email', Contact."E-Mail");
@@ -234,6 +235,7 @@ codeunit 60301 "NLOutlookExtension"
         if OtherContacts.FindSet() then
             repeat
                 Clear(JsonContact); // Reset the JsonObject for each new contact
+                JsonContact.Add('ContactNo', OtherContacts."No."); // Add the contact number
                 JsonContact.Add('Name', OtherContacts.Name);
                 JsonContact.Add('Phone', OtherContacts."Phone No.");
                 JsonContact.Add('Email', OtherContacts."E-Mail");
@@ -250,6 +252,7 @@ codeunit 60301 "NLOutlookExtension"
         // Return the JSON response
         exit(JsonString);
     end;
+
 
 
     [ServiceEnabled]
@@ -376,6 +379,78 @@ codeunit 60301 "NLOutlookExtension"
         result := CustNo;
     end;
 
+    procedure AddOtherContacts(
+    OtherContacts: Text;
+    CustomerId: Code[20]
+)
+    var
+        Position: Integer;
+        ContactFields: array[5] of Text;
+        ContactLine: Text;
+        RemainingContacts: Text;
+        Contact: Record Contact;
+        ContactNo: Code[20];
+        NoSeries: Codeunit "No. Series";
+        MarketingSetup: Record "Marketing Setup";
+        ContactNoSeriesCode: Text[20];
+    begin
+        // Remove any unwanted characters
+        OtherContacts := DelChr(OtherContacts, '<>', '"');
+        RemainingContacts := OtherContacts;
+
+        // Get contact number series
+        if MarketingSetup.Get() then begin
+            ContactNoSeriesCode := MarketingSetup."Contact Nos.";
+            if ContactNoSeriesCode = '' then
+                Error('No. Series for Contact Nos. is not defined in Marketing Setup.');
+        end else
+            Error('Marketing Setup not found.');
+
+        // Process each contact
+        while RemainingContacts <> '' do begin
+            // Extract the next contact, which is enclosed in square brackets
+            Position := StrPos(RemainingContacts, '],');
+            if Position = 0 then
+                Position := StrLen(RemainingContacts); // If it's the last contact
+
+            ContactLine := CopyStr(RemainingContacts, 2, Position - 2); // Extract content inside '[ ]'
+            RemainingContacts := DelStr(RemainingContacts, 1, Position + 1); // Remove processed contact
+
+            if ContactLine <> '' then begin
+                // Split the contact line into individual fields
+                ContactFields[1] := SelectStr(1, ContactLine); // Name
+                ContactFields[2] := SelectStr(2, ContactLine); // Title
+                ContactFields[3] := SelectStr(3, ContactLine); // Direct Phone
+                ContactFields[4] := SelectStr(4, ContactLine); // Mobile Phone
+                ContactFields[5] := DelChr(SelectStr(5, ContactLine), '<>', ']'); // Clean up email field
+
+                // Clean and validate the fields
+                ContactFields[3] := RegHelper.FilterOutLetters(ContactFields[3]);
+                ContactFields[4] := RegHelper.FilterOutLetters(ContactFields[4]);
+
+                if ContactFields[1] <> '' then begin
+                    // Generate a unique contact number
+                    ContactNo := NoSeries.GetNextNo(ContactNoSeriesCode, Today(), true);
+
+                    // Create a new contact record
+                    Contact.Init();
+                    Contact."No." := ContactNo;
+                    Contact.Type := Contact.Type::Person;
+                    Contact."Company No." := CustomerId;
+                    Contact.Validate(Name, ContactFields[1].Trim());
+                    Contact.Validate("Job Title", ContactFields[2].Trim());
+                    Contact.Validate("Phone No.", ContactFields[3].Trim());
+                    Contact.Validate("Mobile Phone No.", ContactFields[4].Trim());
+                    Contact.Validate("E-Mail", CopyStr(ContactFields[5].Trim(), 1, 80));
+
+                    // Insert the new contact
+                    if not Contact.Insert() then
+                        Error('Error creating contact for "%1".', ContactFields[1]);
+                end;
+            end;
+        end;
+    end;
+
 
     [ServiceEnabled]
     procedure UpdateCustomer(
@@ -496,6 +571,81 @@ codeunit 60301 "NLOutlookExtension"
 
         // Return success message
         returnValue := 'Customer with ID ' + CustomerId + ' updated successfully.';
+    end;
+
+    [ServiceEnabled]
+    procedure UpdateOtherContacts(
+        CustomerId: Code[20];
+        UpdatedContacts: Text
+    ) returnValue: Text
+    var
+        Contact: Record Contact;
+        ContactFields: array[6] of Text; // [Contact No., Name, Title, Direct Phone, Mobile Phone, Email]
+        ContactLine: Text;
+        NeedsModify: Boolean;
+        ContactEntries: List of [Text];
+        Entry: Text;
+    begin
+        // Remove outer brackets and quotes, then split entries by '],['
+        UpdatedContacts := CopyStr(UpdatedContacts, 2, StrLen(UpdatedContacts) - 2); // Remove outermost brackets '[...]'
+        ContactEntries := UpdatedContacts.Split('],[');
+
+        foreach Entry in ContactEntries do begin
+            // Clean up the contact entry
+            ContactLine := DelChr(Entry, '<>', '[]');
+
+            // Parse contact fields
+            ContactFields[1] := DelChr(SelectStr(1, ContactLine), '<>', ' '); // Contact No.
+            ContactFields[2] := DelChr(SelectStr(2, ContactLine), '<>', ' '); // Name
+            ContactFields[3] := DelChr(SelectStr(3, ContactLine), '<>', ' '); // Title
+            ContactFields[4] := DelChr(SelectStr(4, ContactLine), '<>', ' '); // Direct Phone
+            ContactFields[5] := DelChr(SelectStr(5, ContactLine), '<>', ' '); // Mobile Phone
+            ContactFields[6] := DelChr(SelectStr(6, ContactLine), '<>', ' '); // Email
+
+            // Find the contact by Contact No.
+            if not Contact.Get(ContactFields[1]) then
+                Error('Contact "%1" not found.', ContactFields[1]);
+
+            // Ensure the contact belongs to the correct customer
+            if Contact."Company No." <> CustomerId then
+                Error('Contact "%1" does not belong to customer "%2".', ContactFields[1], CustomerId);
+
+            // Update fields
+            NeedsModify := false;
+
+            if ContactFields[2] <> '' then begin
+                Contact.Validate(Name, ContactFields[2]);
+                NeedsModify := true;
+            end;
+
+            if ContactFields[3] <> '' then begin
+                Contact.Validate("Job Title", ContactFields[3]);
+                NeedsModify := true;
+            end;
+
+            if ContactFields[4] <> '' then begin
+                Contact.Validate("Phone No.", RegHelper.FilterOutLetters(ContactFields[4]));
+                NeedsModify := true;
+            end;
+
+            if ContactFields[5] <> '' then begin
+                Contact.Validate("Mobile Phone No.", RegHelper.FilterOutLetters(ContactFields[5]));
+                NeedsModify := true;
+            end;
+
+            if ContactFields[6] <> '' then begin
+                RegHelper.ValidateEmail(ContactFields[6]); // Validate the cleaned email
+                Contact.Validate("E-Mail", ContactFields[6]);
+                NeedsModify := true;
+            end;
+
+            // Apply modifications if necessary
+            if NeedsModify then
+                Contact.Modify();
+        end;
+
+        // Return success message
+        returnValue := 'Contacts updated successfully.';
     end;
 
     //https://nl-server.navilogic.dk/bc24-intern/?company=CRONUS%20Danmark%20A%2fS
