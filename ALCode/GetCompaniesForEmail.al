@@ -708,6 +708,27 @@ codeunit 60301 "NLOutlookExtension"
             Error('Company information is not available.');
     end;
 
+    [ServiceEnabled]
+    procedure GetTasksForProject(ProjectId: Code[20]) returnValue: Text
+    var
+        JobTask: Record "Job Task";
+        Result: Text[1024];
+    begin
+        // Ensure the project exists by checking if any tasks are linked to it
+        JobTask.SetRange("Job No.", ProjectId);
+        if not JobTask.FindFirst() then
+            Error('Project with ID "%1" not found.', ProjectId);
+
+        // Collect all tasks into the result string
+        if JobTask.FindSet() then
+            repeat
+                Result += Format(JobTask."Job Task No.") + ', ' + JobTask.Description + ';';
+            until JobTask.Next() = 0;
+
+        // Trim the trailing semicolon
+        exit(Result.TrimEnd(';'));
+    end;
+
     // ---------------------------MOCK DATA UNTIL EXTENSION ADDED TO SANDBOX-------------------------------
     [ServiceEnabled]
     procedure GetTaskAnalysis(TaskId: Code[20]) returnValue: Text
