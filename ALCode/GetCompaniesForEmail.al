@@ -672,6 +672,54 @@ codeunit 60301 "NLOutlookExtension"
         exit(Link);
     end;
 
+    procedure GetInvoiceLink(InvoiceNo: Code[20]): Text
+    var
+    
+        BaseUrl: Text;
+        PageId: Integer;
+        Link: Text;
+    begin
+        // Fixed Base URL
+        BaseUrl := 'https://nl-server.navilogic.dk/bc24-intern/?company=CRONUS%20Danmark%20A%2fS';
+
+        //Page ID
+        PageId := 132;
+
+        // Construct the full URL
+        Link := StrSubstNo(
+            '%1&page=%2&record=%3',
+            BaseUrl,
+            PageId,
+            InvoiceNo
+        );
+
+        exit(Link);
+    end;
+
+     procedure GetCreditNoteLink(CreditNoteNo: Code[20]): Text
+    var
+    
+        BaseUrl: Text;
+        PageId: Integer;
+        Link: Text;
+    begin
+        // Fixed Base URL
+        BaseUrl := 'https://nl-server.navilogic.dk/bc24-intern/?company=CRONUS%20Danmark%20A%2fS';
+
+        //Page ID
+        PageId := 44;
+
+        // Construct the full URL
+        Link := StrSubstNo(
+            '%1&page=%2&record=%3',
+            BaseUrl,
+            PageId,
+            CreditNoteNo
+        );
+
+        exit(Link);
+    end;
+
 
     procedure EncodeDataString(Input: Text): Text
     var
