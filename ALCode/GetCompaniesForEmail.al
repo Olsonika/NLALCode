@@ -648,32 +648,25 @@ codeunit 60301 "NLOutlookExtension"
         returnValue := 'Contacts updated successfully.';
     end;
 
-    //https://nl-server.navilogic.dk/bc24-intern/?company=CRONUS%20Danmark%20A%2fS
+//https://nl-server.navilogic.dk/bc24-intern/?company=CRONUS%20Danmark%20A%2fS
     procedure GetSalesQuoteLink(QuoteNo: Code[20]): Text
     var
         BaseUrl: Text;
-        Tenant: Text;
         PageId: Integer;
-        Bookmark: Text;
         Link: Text;
     begin
         // Fixed Base URL
         BaseUrl := 'https://nl-server.navilogic.dk/bc24-intern/?company=CRONUS%20Danmark%20A%2fS';
 
-        // Tenant and Page ID
-        Tenant := 'default';
+        //Page ID
         PageId := 41;
-
-        // Manually create the bookmark for the Sales Quote (e.g., "19_1001")
-        Bookmark := StrSubstNo('19_%1', QuoteNo);
 
         // Construct the full URL
         Link := StrSubstNo(
-            '%1&tenant=%2&page=%3&bookmark=%4',
+            '%1&page=%2&record=%3',
             BaseUrl,
-            Tenant,
             PageId,
-            Bookmark
+            QuoteNo
         );
 
         exit(Link);
