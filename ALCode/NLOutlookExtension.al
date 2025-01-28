@@ -63,7 +63,12 @@ codeunit 60301 "NLOutlookExtension"
         StartIndex: Integer;
         EndIndex: Integer;
         Index: Integer;
+        BaseUrl: Text;
+        ProjectLink: Text;
     begin
+        // Base URL for project links
+        BaseUrl := 'https://nl-server.navilogic.dk/bc24-intern';
+
         // Find the company by ID
         if not Companies.Get(CompanyId) then
             Error('Company with ID "%1" not found.', CompanyId);
@@ -75,7 +80,10 @@ codeunit 60301 "NLOutlookExtension"
 
         if Project.FindSet() then
             repeat
-                Projects.Add(Format(Project.Description) + ' (' + Project."No." + ')');
+                // Generate a project link for page 88
+                ProjectLink := StrSubstNo('%1?page=88&filter=''No.''%20IS%20''%2''', BaseUrl, Project."No.");
+                // Add project with link to the list
+                Projects.Add(Format(Project.Description) + ' (' + Project."No." + ') [' + ProjectLink + ']');
             until Project.Next() = 0;
 
         // Define pagination range
@@ -101,8 +109,12 @@ codeunit 60301 "NLOutlookExtension"
         StartIndex: Integer;
         EndIndex: Integer;
         Index: Integer;
+        BaseUrl: Text;
         QuoteLink: Text;
     begin
+        // Define the base URL for links
+        BaseUrl := 'https://nl-server.navilogic.dk/bc24-intern';
+
         // Filter sales quotes for the specific company
         SalesHeader.SetRange("Sell-to Customer No.", CompanyId);
         SalesHeader.SetRange("Document Type", SalesHeader."Document Type"::Quote);
@@ -110,8 +122,8 @@ codeunit 60301 "NLOutlookExtension"
         if SalesHeader.FindSet() then
             repeat
                 // Generate link for each sales quote
-                QuoteLink := GetSalesQuoteLink(SalesHeader."No.");
-                Quotes.Add(Format(SalesHeader."No.") + ': ' + Format(SalesHeader."Document Date") + ' (' + QuoteLink + ')');
+                QuoteLink := StrSubstNo('%1?page=41&filter=''No.''%20IS%20''%2''', BaseUrl, SalesHeader."No.");
+                Quotes.Add(Format(SalesHeader."Document Date") + ' (' + SalesHeader."No." + ') [' + QuoteLink + ']');
             until SalesHeader.Next() = 0;
 
         // Define pagination range
@@ -129,7 +141,6 @@ codeunit 60301 "NLOutlookExtension"
     end;
 
 
-
     [ServiceEnabled]
     procedure GetLastInvoices(CompanyId: Code[20]; Count: Integer) returnValue: Text
     var
@@ -137,7 +148,12 @@ codeunit 60301 "NLOutlookExtension"
         Invoices: List of [Text];
         Result: Text[1024];
         Index: Integer;
+        BaseUrl: Text;
+        InvoiceLink: Text;
     begin
+        // Define the base URL for links
+        BaseUrl := 'https://nl-server.navilogic.dk/bc24-intern';
+
         // Filter invoices for the specific company
         Invoice.SetRange("Sell-to Customer No.", CompanyId);
 
@@ -147,7 +163,9 @@ codeunit 60301 "NLOutlookExtension"
 
         if Invoice.FindSet() then
             repeat
-                Invoices.Add(Format(Invoice."No.") + ': ' + Format(Invoice."Posting Date"));
+                // Generate link for each invoice
+                InvoiceLink := StrSubstNo('%1?page=132&filter=''No.''%20IS%20''%2''', BaseUrl, Invoice."No.");
+                Invoices.Add(Format(Invoice."Posting Date") + ' (' + Invoice."No." + ') [' + InvoiceLink + ']');
             until (Invoice.Next() = 0) or (Invoices.Count() >= Count);
 
         // Generate response
@@ -166,13 +184,20 @@ codeunit 60301 "NLOutlookExtension"
         StartIndex: Integer;
         EndIndex: Integer;
         Index: Integer;
+        BaseUrl: Text;
     begin
+        // Define the base URL for the credit note link
+        BaseUrl := 'https://nl-server.navilogic.dk/bc24-intern';
+
         // Filter credit notes for the specific company
         CreditMemo.SetRange("Sell-to Customer No.", CompanyId);
 
         if CreditMemo.FindSet() then
             repeat
-                CreditNotes.Add(Format(CreditMemo."No.") + ': ' + Format(CreditMemo."Posting Date"));
+                CreditNotes.Add(
+                    Format(CreditMemo."No.") + ': ' + Format(CreditMemo."Posting Date") +
+                    ' [' + StrSubstNo('%1?page=45&filter=''No.''%20IS%20''%2''', BaseUrl, CreditMemo."No.") + ']'
+                );
             until CreditMemo.Next() = 0;
 
         // Define pagination range
@@ -182,62 +207,103 @@ codeunit 60301 "NLOutlookExtension"
         else
             EndIndex := CreditNotes.Count();
 
-        // Generate response
+        // Generate response for the requested page
         for Index := StartIndex to EndIndex do
             Result += CreditNotes.Get(Index) + ';';
 
         exit(Result.TrimEnd(';'));
     end;
 
-    [ServiceEnabled]
+
     procedure GetCompanyDetails(CompanyId: Code[20]) returnValue: Text
     var
         Customer: Record Customer;
         Contact: Record Contact;
         OtherContacts: Record Contact;
+        Salesperson: Record "Salesperson/Purchaser";
         JsonObject: JsonObject;
         JsonContactsArray: JsonArray;
         JsonContact: JsonObject;
         JsonString: Text;
+        BaseUrl: Text;
+        CompanyLink: Text;
+        CreditLimit: Decimal;
+        BlockedStatus: Text;
     begin
         // Fetch company details
         if not Customer.Get(CompanyId) then
             Error('Company with ID "%1" not found.', CompanyId);
 
-        // Calculate FlowFields for balance and overdue amounts
-        Customer.CalcFields(Balance, "Balance Due");
+        // Calculate FlowFields
+        Customer.CalcFields("Sales (LCY)", Balance, "Balance Due");
 
-        // Add main company details to JSON object
+        // Base URL for the environment
+        BaseUrl := 'https://nl-server.navilogic.dk/bc24-intern';
+
+        // Generate company link
+        CompanyLink := StrSubstNo('%1?page=21&filter=''No.''%20IS%20''%2''', BaseUrl, Customer."No.");
+
+        // Prepare JSON data
         JsonObject.Add('CompanyName', Customer.Name);
-        JsonObject.Add('Balance', Format(Customer.Balance)); // Ensure proper formatting
-        JsonObject.Add('OverdueAmount', Format(Customer."Balance Due"));
+        JsonObject.Add('CompanyNo', Customer."No.");
+        JsonObject.Add('CompanyLink', CompanyLink);
+        JsonObject.Add('SalesLCY', Format(Customer."Sales (LCY)"));
+        JsonObject.Add('BalanceLCY', Format(Customer.Balance));
+        JsonObject.Add('BalanceDueLCY', Format(Customer."Balance Due"));
+
+        // Add credit limit
+        CreditLimit := Customer."Credit Limit (LCY)";
+        if CreditLimit = 0 then
+            JsonObject.Add('CreditLimitLCY', 'N/A')
+        else
+            JsonObject.Add('CreditLimitLCY', Format(CreditLimit));
+
+        // Add blocked status
+        BlockedStatus := Format(Customer.Blocked);
+        if BlockedStatus = '' then
+            BlockedStatus := 'No';
+        JsonObject.Add('Blocked', BlockedStatus);
+
+        // Add website
+        JsonObject.Add('Website', Customer."Home Page");
+
+        // Fetch salesperson details
+        if Salesperson.Get(Customer."Salesperson Code") then
+            JsonObject.Add('Salesperson', Salesperson.Name)
+        else
+            JsonObject.Add('Salesperson', 'N/A');
 
         // Add location details
         JsonObject.Add('Address', Customer.Address);
+        JsonObject.Add('Address2', Customer."Address 2");
         JsonObject.Add('City', Customer.City);
         JsonObject.Add('PostalCode', Customer."Post Code");
         JsonObject.Add('Country', Customer."Country/Region Code");
 
         // Fetch main contact details
         if Contact.Get(Customer."Primary Contact No.") then begin
-            Clear(JsonContact); // Reset the JsonObject for the primary contact
-            JsonContact.Add('ContactNo', Contact."No."); // Add the contact number
+            Clear(JsonContact);
+            JsonContact.Add('ContactNo', Contact."No.");
             JsonContact.Add('Name', Contact.Name);
             JsonContact.Add('Phone', Contact."Phone No.");
+            JsonContact.Add('MobilePhone', Contact."Mobile Phone No.");
+            JsonContact.Add('DirectPhone', Contact."Phone No.");
             JsonContact.Add('Email', Contact."E-Mail");
             JsonContact.Add('JobTitle', Contact."Job Title");
             JsonObject.Add('PrimaryContact', JsonContact);
         end;
 
-        // Fetch other contacts associated with the company
+        // Fetch other contacts
         OtherContacts.SetRange("Company No.", Customer."No.");
-        OtherContacts.SetRange(Type, OtherContacts.Type::Person); // Ensure only person contacts are fetched
+        OtherContacts.SetRange(Type, OtherContacts.Type::Person);
         if OtherContacts.FindSet() then
             repeat
-                Clear(JsonContact); // Reset the JsonObject for each new contact
-                JsonContact.Add('ContactNo', OtherContacts."No."); // Add the contact number
+                Clear(JsonContact);
+                JsonContact.Add('ContactNo', OtherContacts."No.");
                 JsonContact.Add('Name', OtherContacts.Name);
                 JsonContact.Add('Phone', OtherContacts."Phone No.");
+                JsonContact.Add('MobilePhone', OtherContacts."Mobile Phone No.");
+                JsonContact.Add('DirectPhone', OtherContacts."Phone No.");
                 JsonContact.Add('Email', OtherContacts."E-Mail");
                 JsonContact.Add('JobTitle', OtherContacts."Job Title");
                 JsonContactsArray.Add(JsonContact);
@@ -252,8 +318,6 @@ codeunit 60301 "NLOutlookExtension"
         // Return the JSON response
         exit(JsonString);
     end;
-
-
 
     [ServiceEnabled]
     procedure CreateCustomer(
@@ -648,7 +712,7 @@ codeunit 60301 "NLOutlookExtension"
         returnValue := 'Contacts updated successfully.';
     end;
 
-//https://nl-server.navilogic.dk/bc24-intern/?company=CRONUS%20Danmark%20A%2fS
+    //https://nl-server.navilogic.dk/bc24-intern/?company=CRONUS%20Danmark%20A%2fS
     procedure GetSalesQuoteLink(QuoteNo: Code[20]): Text
     var
         BaseUrl: Text;
@@ -674,7 +738,7 @@ codeunit 60301 "NLOutlookExtension"
 
     procedure GetInvoiceLink(InvoiceNo: Code[20]): Text
     var
-    
+
         BaseUrl: Text;
         PageId: Integer;
         Link: Text;
@@ -696,9 +760,9 @@ codeunit 60301 "NLOutlookExtension"
         exit(Link);
     end;
 
-     procedure GetCreditNoteLink(CreditNoteNo: Code[20]): Text
+    procedure GetCreditNoteLink(CreditNoteNo: Code[20]): Text
     var
-    
+
         BaseUrl: Text;
         PageId: Integer;
         Link: Text;
