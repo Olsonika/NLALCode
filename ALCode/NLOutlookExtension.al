@@ -8,9 +8,11 @@ codeunit 60701 "NLOutlookExtension"
 
     [ServiceEnabled]
     procedure GetCompaniesForEmail(EmailAddress: Text[250]; PageSize: Integer; PageNumber: Integer) returnValue: Text
+
     begin
         returnValue := CompanyService.GetCompaniesForEmail(EmailAddress, PageSize, PageNumber);
     end;
+
 
     [ServiceEnabled]
     procedure GetCompanyDetails(CompanyId: Code[20]; IsCustomer: Boolean) returnValue: Text
@@ -35,6 +37,7 @@ codeunit 60701 "NLOutlookExtension"
         returnValue := ProjectService.GetTasksForProject(ProjectId);
     end;
 
+
     [ServiceEnabled]
     procedure GetSalesQuotes(CompanyId: Code[20]; PageSize: Integer; PageNumber: Integer) returnValue: Text
     begin
@@ -52,6 +55,8 @@ codeunit 60701 "NLOutlookExtension"
     begin
         returnValue := SalesService.GetCreditNotes(CompanyId, PageSize, PageNumber);
     end;
+
+
 
     [ServiceEnabled]
     procedure CreateCustomer(
@@ -72,6 +77,7 @@ codeunit 60701 "NLOutlookExtension"
         InvoiceLanguage: Text;
         InvoiceCurrency: Text
     ) result: Code[20]
+
     begin
         result := ContactService.CreateCustomer(
             CompanyName, Address, Address2, PostalCode, City, Cvr, PhoneNumber, InvoiceEmail,
