@@ -121,10 +121,12 @@ codeunit 60701 "NLOutlookExtension"
         returnValue := ContactService.UpdateOtherContacts(CustomerId, UpdatedContacts);
     end;
 
-    procedure AddOtherContacts(OtherContacts: Text; CustomerId: Code[20])
+    [ServiceEnabled]
+    procedure AddOtherContacts(OtherContacts: Text; CustomerId: Code[20]) returnValue: Text
     begin
-        ContactService.AddOtherContacts(OtherContacts, CustomerId);
+        returnValue := ContactService.AddOtherContacts(OtherContacts, CustomerId);
     end;
+
 
     procedure GetSalesQuoteLink(QuoteNo: Code[20]): Text
     begin

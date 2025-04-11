@@ -7,7 +7,10 @@ codeunit 60703 "NLContactService"
     var
         RegHelper: Codeunit "NL Registration Helper";
 
-    procedure AddOtherContacts(OtherContacts: Text; CustomerId: Code[20]): Text
+    procedure AddOtherContacts(
+    OtherContacts: Text;
+    CustomerId: Code[20]
+): Text
     var
         Position: Integer;
         ContactFields: array[5] of Text;
@@ -18,12 +21,18 @@ codeunit 60703 "NLContactService"
         NoSeries: Codeunit "No. Series";
         MarketingSetup: Record "Marketing Setup";
         ContactNoSeriesCode: Text[20];
-        ContactBusinessRel: Record "Contact Business Relation";
-        RegHelper: Codeunit "NL Registration Helper";
+        Result: Text;
+        Customer: Record Customer;
     begin
+        // Remove any unwanted characters
         OtherContacts := DelChr(OtherContacts, '<>', '"');
         RemainingContacts := OtherContacts;
 
+        // Get customer for "Company Name" field
+        if not Customer.Get(CustomerId) then
+            Error('Customer "%1" not found.', CustomerId);
+
+        // Get contact number series
         if MarketingSetup.Get() then begin
             ContactNoSeriesCode := MarketingSetup."Contact Nos.";
             if ContactNoSeriesCode = '' then
@@ -31,52 +40,58 @@ codeunit 60703 "NLContactService"
         end else
             Error('Marketing Setup not found.');
 
+        // Process each contact
         while RemainingContacts <> '' do begin
+            // Extract the next contact, which is enclosed in square brackets
             Position := StrPos(RemainingContacts, '],');
             if Position = 0 then
-                Position := StrLen(RemainingContacts);
+                Position := StrLen(RemainingContacts); // If it's the last contact
 
-            ContactLine := CopyStr(RemainingContacts, 2, Position - 2);
-            RemainingContacts := DelStr(RemainingContacts, 1, Position + 1);
+            ContactLine := CopyStr(RemainingContacts, 2, Position - 2); // Extract content inside '[ ]'
+            RemainingContacts := DelStr(RemainingContacts, 1, Position + 1); // Remove processed contact
 
             if ContactLine <> '' then begin
-                ContactFields[1] := SelectStr(1, ContactLine);
-                ContactFields[2] := SelectStr(2, ContactLine);
-                ContactFields[3] := SelectStr(3, ContactLine);
-                ContactFields[4] := SelectStr(4, ContactLine);
-                ContactFields[5] := DelChr(SelectStr(5, ContactLine), '<>', ']');
+                // Split the contact line into individual fields
+                ContactFields[1] := SelectStr(1, ContactLine); // Name
+                ContactFields[2] := SelectStr(2, ContactLine); // Title
+                ContactFields[3] := SelectStr(3, ContactLine); // Direct Phone
+                ContactFields[4] := SelectStr(4, ContactLine); // Mobile Phone
+                ContactFields[5] := DelChr(SelectStr(5, ContactLine), '<>', ']'); // Clean up email field
 
+                // Clean and validate the fields
                 ContactFields[3] := RegHelper.FilterOutLetters(ContactFields[3]);
                 ContactFields[4] := RegHelper.FilterOutLetters(ContactFields[4]);
 
                 if ContactFields[1] <> '' then begin
+                    // Generate a unique contact number
                     ContactNo := NoSeries.GetNextNo(ContactNoSeriesCode, Today(), true);
 
+                    // Create a new contact record
                     Contact.Init();
                     Contact."No." := ContactNo;
                     Contact.Type := Contact.Type::Person;
                     Contact."Company No." := CustomerId;
+                    Contact.Validate("Company Name", Customer.Name); // ✅ Important addition
                     Contact.Validate(Name, ContactFields[1].Trim());
                     Contact.Validate("Job Title", ContactFields[2].Trim());
                     Contact.Validate("Phone No.", ContactFields[3].Trim());
                     Contact.Validate("Mobile Phone No.", ContactFields[4].Trim());
                     Contact.Validate("E-Mail", CopyStr(ContactFields[5].Trim(), 1, 80));
 
+                    // Insert the new contact
                     if not Contact.Insert() then
                         Error('Error creating contact for "%1".', ContactFields[1]);
 
-                    if not ContactBusinessRel.Get(Contact."No.", ContactBusinessRel."Link to Table"::Customer, CustomerId) then begin
-                        ContactBusinessRel.Init();
-                        ContactBusinessRel.Validate("Contact No.", Contact."No.");
-                        ContactBusinessRel.Validate("Link to Table", ContactBusinessRel."Link to Table"::Customer);
-                        ContactBusinessRel.Validate("No.", CustomerId);
-                        ContactBusinessRel.Insert();
-                    end;
+                    // Append to result message
+                    Result += StrSubstNo('%1 (%2); ', ContactFields[1].Trim(), ContactNo);
                 end;
             end;
         end;
 
-        exit('Other contacts added successfully.');
+        if Result = '' then
+            exit('No contacts were created.');
+
+        exit('Other contacts have successfully been added.');
     end;
 
     procedure UpdateOtherContacts(CustomerId: Code[20]; UpdatedContacts: Text): Text
