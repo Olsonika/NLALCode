@@ -1,8 +1,8 @@
 {
-  "id": "f23f9b5f-e79b-4747-b78a-18062ecbcc2a",
-  "name": "NLOutlookExtension",
+  "id": "19240917-0fc6-4329-8eb8-41ee48085be0",
+  "name": "NL Outlook Extension",
   "publisher": "NaviLogic",
-  "version": "1.0.0.0",
+  "version": "1.0.4.0",
   "brief": "",
   "description": "",
   "privacyStatement": "",
@@ -16,8 +16,8 @@
   "application": "24.0.0.0",
   "idRanges": [
     {
-      "from": 60300,
-      "to": 60350
+      "from": 60700,
+      "to": 60749
     }
   ],
   "resourceExposurePolicy": {
@@ -25,8 +25,9 @@
     "allowDownloadingSource": true,
     "includeSourceInSymbolFile": true
   },
-  "runtime": "13.1",
+  "runtime": "13.0",
   "features": [
-    "NoImplicitWith"
+    "NoImplicitWith",
+    "TranslationFile"
   ]
 }
