@@ -1,4 +1,4 @@
-codeunit 60302 "NL Registration Helper"
+codeunit 60702 "NL Registration Helper"
 {
     procedure SelectCustomerTemplate(LanguageCode: Text; CountryCode: Text): Code[20]
     var
