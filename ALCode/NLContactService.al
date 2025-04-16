@@ -12,17 +12,17 @@ codeunit 60703 "NLContactService"
     CustomerId: Code[20]
 ): Text
     var
+        MarketingSetup: Record "Marketing Setup";
+        Customer: Record Customer;
+        Contact: Record Contact;
+        NoSeries: Codeunit "No. Series";
         Position: Integer;
         ContactFields: array[5] of Text;
         ContactLine: Text;
         RemainingContacts: Text;
-        Contact: Record Contact;
         ContactNo: Code[20];
-        NoSeries: Codeunit "No. Series";
-        MarketingSetup: Record "Marketing Setup";
         ContactNoSeriesCode: Text[20];
         Result: Text;
-        Customer: Record Customer;
     begin
         // Remove any unwanted characters
         OtherContacts := DelChr(OtherContacts, '<>', '"');
@@ -47,7 +47,7 @@ codeunit 60703 "NLContactService"
             if Position = 0 then
                 Position := StrLen(RemainingContacts); // If it's the last contact
 
-            ContactLine := CopyStr(RemainingContacts, 2, Position - 2); // Extract content inside '[ ]'
+            ContactLine := DelChr(CopyStr(RemainingContacts, 2, Position - 2), '<>', '[]');
             RemainingContacts := DelStr(RemainingContacts, 1, Position + 1); // Remove processed contact
 
             if ContactLine <> '' then begin
@@ -102,7 +102,6 @@ codeunit 60703 "NLContactService"
         NeedsModify: Boolean;
         ContactEntries: List of [Text];
         Entry: Text;
-        RegHelper: Codeunit "NL Registration Helper";
     begin
         UpdatedContacts := CopyStr(UpdatedContacts, 2, StrLen(UpdatedContacts) - 2);
         ContactEntries := UpdatedContacts.Split('],[');
@@ -174,9 +173,11 @@ codeunit 60703 "NLContactService"
         PrimaryContactTitle: Text;
         CountryCode: Text;
         InvoiceLanguage: Text;
-        InvoiceCurrency: Text
+        InvoiceCurrency: Text;
+        Website: Text
     ): Code[20]
     var
+        SalesSetup: Record "Sales & Receivables Setup";
         Contact: Record Contact;
         Customer: Record Customer;
         CustomerTemplate: Record "Customer Templ.";
@@ -190,7 +191,6 @@ codeunit 60703 "NLContactService"
         TemplateCode: Code[20];
         ContactNoSeriesCode: Text[20];
         CustNoSeriesCode: Text[20];
-        SalesSetup: Record "Sales & Receivables Setup";
     begin
         if SalesSetup.Get() then begin
             CustNoSeriesCode := SalesSetup."Customer Nos.";
@@ -210,6 +210,7 @@ codeunit 60703 "NLContactService"
         Customer.Validate("Country/Region Code", CountryCode);
         Customer.Validate("VAT Registration No.", Cvr);
         Customer.Validate("Phone No.", PhoneNumber);
+        Customer.Validate("Home Page", Website);
         RegHelper.ValidateEmail(InvoiceEmail);
         Customer."E-Mail" := InvoiceEmail;
 
@@ -342,7 +343,7 @@ codeunit 60703 "NLContactService"
         if NeedsModify then
             Customer.Modify();
 
-        if Customer."Primary Contact No." <> '' then begin
+        if Customer."Primary Contact No." <> '' then
             if Contact.Get(Customer."Primary Contact No.") then begin
                 if PrimaryContactFirstAndLastName <> '' then
                     Contact.Validate(Name, PrimaryContactFirstAndLastName);
@@ -359,8 +360,53 @@ codeunit 60703 "NLContactService"
                 Contact.Modify();
             end else
                 Error('Primary contact for customer "%1" not found.', CustomerId);
-        end;
+
 
         exit('Customer with ID ' + CustomerId + ' updated successfully.');
     end;
+
+    procedure GetOtherContacts(CustomerId: Code[20]): Text
+    var
+        Customer: Record Customer;
+        Contact: Record Contact;
+        JsonArray: List of [Text];
+        JsonObject: Text;
+        ResultJson: Text;
+    begin
+        // Get customer by ID
+        if not Customer.Get(CustomerId) then
+            Error('Customer "%1" not found.', CustomerId);
+
+        // Filter by Company Name instead of Company No.
+        Contact.SetRange("Company Name", Customer.Name);
+        Contact.SetRange(Type, Contact.Type::Person);
+
+        if Contact.FindSet() then
+            repeat
+                if Contact."No." <> Customer."Primary Contact No." then begin
+                    JsonObject :=
+                        '{' +
+                            '"ContactNo": "' + Contact."No." + '", ' +
+                            '"Name": "' + Contact.Name + '", ' +
+                            '"JobTitle": "' + Contact."Job Title" + '", ' +
+                            '"Phone": "' + Contact."Phone No." + '", ' +
+                            '"Mobile": "' + Contact."Mobile Phone No." + '", ' +
+                            '"Email": "' + Contact."E-Mail" + '"' +
+                        '}';
+                    JsonArray.Add(JsonObject);
+                end;
+            until Contact.Next() = 0;
+
+        foreach JsonObject in JsonArray do begin
+            if ResultJson <> '' then
+                ResultJson += ',';
+            ResultJson += JsonObject;
+        end;
+
+        if ResultJson = '' then
+            exit('[]')
+        else
+            exit('[' + ResultJson + ']');
+    end;
+
 }

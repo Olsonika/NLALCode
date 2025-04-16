@@ -75,14 +75,15 @@ codeunit 60701 "NLOutlookExtension"
         PrimaryContactTitle: Text;
         CountryCode: Text;
         InvoiceLanguage: Text;
-        InvoiceCurrency: Text
+        InvoiceCurrency: Text;
+        Website: Text
     ) result: Code[20]
 
     begin
         result := ContactService.CreateCustomer(
             CompanyName, Address, Address2, PostalCode, City, Cvr, PhoneNumber, InvoiceEmail,
             PrimaryContactFirstAndLastName, PrimaryContactMobilePhoneNumber, PrimaryContactDirectPhoneNumber,
-            PrimaryContactEmail, PrimaryContactTitle, CountryCode, InvoiceLanguage, InvoiceCurrency
+            PrimaryContactEmail, PrimaryContactTitle, CountryCode, InvoiceLanguage, InvoiceCurrency, Website
         );
     end;
 
@@ -127,6 +128,11 @@ codeunit 60701 "NLOutlookExtension"
         returnValue := ContactService.AddOtherContacts(OtherContacts, CustomerId);
     end;
 
+    [ServiceEnabled]
+    procedure GetOtherContacts(CompanyId: Code[20]) returnValue: Text
+    begin
+        returnValue := ContactService.GetOtherContacts(CompanyId);
+    end;
 
     procedure GetSalesQuoteLink(QuoteNo: Code[20]): Text
     begin
